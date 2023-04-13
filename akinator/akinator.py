@@ -22,12 +22,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+import json
 import re
 import time
-import json
+from typing import Optional
 
-from .utils import ans_to_id, get_lang_and_theme, raise_connection_error
 from .exceptions import CantGoBackAnyFurther
+from .utils import ans_to_id, get_lang_and_theme, raise_connection_error
 
 try:
     import requests
@@ -50,16 +51,17 @@ HEADERS = {
 }
 
 
-class Akinator():
+class Akinator:
     """
     A class that represents an Akinator game.
     The first thing you want to do after calling an instance of this class is to call "start_game()".
     """
-    def __init__(self):
-        self.uri = None
-        self.server = None
-        self.session = None
-        self.signature = None
+
+    def __init__(self, proxy: Optional[str]):
+        self.uri: str = ""
+        self.server: str = ""
+        self.session: str = ""
+        self.signature: str = ""
         self.uid = None
         self.frontaddr = None
         self.child_mode = None
@@ -73,6 +75,8 @@ class Akinator():
         self.first_guess = None
         self.guesses = None
 
+        self.proxy = {"http": proxy, "https": proxy} if proxy else None
+
     def _update(self, resp, start=False):
         """Update class variables"""
 
@@ -80,7 +84,9 @@ class Akinator():
             self.session = int(resp["parameters"]["identification"]["session"])
             self.signature = int(resp["parameters"]["identification"]["signature"])
             self.question = str(resp["parameters"]["step_information"]["question"])
-            self.progression = float(resp["parameters"]["step_information"]["progression"])
+            self.progression = float(
+                resp["parameters"]["step_information"]["progression"],
+            )
             self.step = int(resp["parameters"]["step_information"]["step"])
         else:
             self.question = str(resp["parameters"]["question"])
@@ -95,8 +101,10 @@ class Akinator():
     def _get_session_info(self):
         """Get uid and frontaddr from akinator.com/game"""
 
-        info_regex = re.compile("var uid_ext_session = '(.*)'\\;\\n.*var frontaddr = '(.*)'\\;")
-        r = requests.get("https://en.akinator.com/game")
+        info_regex = re.compile(
+            "var uid_ext_session = '(.*)'\\;\\n.*var frontaddr = '(.*)'\\;",
+        )
+        r = requests.get("https://en.akinator.com/game", proxies=self.proxy)
 
         match = info_regex.search(r.text)
         self.uid, self.frontaddr = match.groups()[0], match.groups()[1]
@@ -104,22 +112,30 @@ class Akinator():
     def _auto_get_region(self, lang, theme):
         """Automatically get the uri and server from akinator.com for the specified language and theme"""
 
-        server_regex = re.compile("[{\"translated_theme_name\":\"[\s\S]*\",\"urlWs\":\"https:\\\/\\\/srv[0-9]+\.akinator\.com:[0-9]+\\\/ws\",\"subject_id\":\"[0-9]+\"}]")
+        server_regex = re.compile(
+            '[{"translated_theme_name":"[\s\S]*","urlWs":"https:\\\/\\\/srv[0-9]+\.akinator\.com:[0-9]+\\\/ws","subject_id":"[0-9]+"}]',
+        )
         uri = lang + ".akinator.com"
 
         bad_list = ["https://srv12.akinator.com:9398/ws"]
         while True:
-            r = requests.get("https://" + uri)
+            r = requests.get("https://" + uri, proxies=self.proxy)
 
             match = server_regex.search(r.text)
             parsed = json.loads(match.group().split("'arrUrlThemesToPlay', ")[-1])
 
             if theme == "c":
-                server = next((i for i in parsed if i["subject_id"] == "1"), None)["urlWs"]
+                server = next((i for i in parsed if i["subject_id"] == "1"), None)[
+                    "urlWs"
+                ]
             elif theme == "a":
-                server = next((i for i in parsed if i["subject_id"] == "14"), None)["urlWs"]
+                server = next((i for i in parsed if i["subject_id"] == "14"), None)[
+                    "urlWs"
+                ]
             elif theme == "o":
-                server = next((i for i in parsed if i["subject_id"] == "2"), None)["urlWs"]
+                server = next((i for i in parsed if i["subject_id"] == "2"), None)[
+                    "urlWs"
+                ]
 
             if server not in bad_list:
                 return {"uri": uri, "server": server}
@@ -157,7 +173,10 @@ class Akinator():
         The "child_mode" parameter is False by default. If it's set to True, then Akinator won't ask questions about things that are NSFW
         """
         self.timestamp = time.time()
-        region_info = self._auto_get_region(get_lang_and_theme(language)["lang"], get_lang_and_theme(language)["theme"])
+        region_info = self._auto_get_region(
+            get_lang_and_theme(language)["lang"],
+            get_lang_and_theme(language)["theme"],
+        )
         self.uri, self.server = region_info["uri"], region_info["server"]
 
         self.child_mode = child_mode
@@ -166,7 +185,20 @@ class Akinator():
 
         self._get_session_info()
 
-        r = requests.get(NEW_SESSION_URL.format(self.uri, self.timestamp, self.server, str(self.child_mode).lower(), self.uid, self.frontaddr, soft_constraint, self.question_filter), headers=HEADERS)
+        r = requests.get(
+            NEW_SESSION_URL.format(
+                self.uri,
+                self.timestamp,
+                self.server,
+                str(self.child_mode).lower(),
+                self.uid,
+                self.frontaddr,
+                soft_constraint,
+                self.question_filter,
+            ),
+            headers=HEADERS,
+            proxies=self.proxy,
+        )
         resp = self._parse_response(r.text)
 
         if resp["completion"] == "OK":
@@ -187,7 +219,22 @@ class Akinator():
         """
         ans = ans_to_id(ans)
 
-        r = requests.get(ANSWER_URL.format(self.uri, self.timestamp, self.server, str(self.child_mode).lower(), self.session, self.signature, self.step, ans, self.frontaddr, self.question_filter), headers=HEADERS)
+        r = requests.get(
+            ANSWER_URL.format(
+                self.uri,
+                self.timestamp,
+                self.server,
+                str(self.child_mode).lower(),
+                self.session,
+                self.signature,
+                self.step,
+                ans,
+                self.frontaddr,
+                self.question_filter,
+            ),
+            headers=HEADERS,
+            proxies=self.proxy,
+        )
         resp = self._parse_response(r.text)
 
         if resp["completion"] == "OK":
@@ -202,9 +249,23 @@ class Akinator():
         If you're on the first question and you try to go back again, the CantGoBackAnyFurther exception will be raised
         """
         if self.step == 0:
-            raise CantGoBackAnyFurther("You were on the first question and couldn't go back any further")
+            raise CantGoBackAnyFurther(
+                "You were on the first question and couldn't go back any further",
+            )
 
-        r = requests.get(BACK_URL.format(self.server, self.timestamp, str(self.child_mode).lower(), self.session, self.signature, self.step, self.question_filter), headers=HEADERS)
+        r = requests.get(
+            BACK_URL.format(
+                self.server,
+                self.timestamp,
+                str(self.child_mode).lower(),
+                self.session,
+                self.signature,
+                self.step,
+                self.question_filter,
+            ),
+            headers=HEADERS,
+            proxies=self.proxy,
+        )
         resp = self._parse_response(r.text)
 
         if resp["completion"] == "OK":
@@ -222,7 +283,18 @@ class Akinator():
 
         It's recommended that you call this function when Aki's progression is above 85%, which is when he will have most likely narrowed it down to just one choice. You can get his current progression via "Akinator.progression"
         """
-        r = requests.get(WIN_URL.format(self.server, self.timestamp, str(self.child_mode).lower(), self.session, self.signature, self.step), headers=HEADERS)
+        r = requests.get(
+            WIN_URL.format(
+                self.server,
+                self.timestamp,
+                str(self.child_mode).lower(),
+                self.session,
+                self.signature,
+                self.step,
+            ),
+            headers=HEADERS,
+            proxies=self.proxy,
+        )
         resp = self._parse_response(r.text)
 
         if resp["completion"] == "OK":

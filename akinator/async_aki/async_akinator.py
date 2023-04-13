@@ -22,13 +22,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-from ..utils import ans_to_id, get_lang_and_theme, raise_connection_error
-from ..exceptions import CantGoBackAnyFurther
-import aiohttp
+import json
 import re
 import time
-import json
+from typing import Optional
 
+import aiohttp
+
+from akinator.exceptions import CantGoBackAnyFurther
+from akinator.utils import ans_to_id, get_lang_and_theme, raise_connection_error
 
 NEW_SESSION_URL = "https://{}/new_session?callback=jQuery331023608747682107778_{}&urlApiWs={}&partner=1&childMod={}&player=website-desktop&uid_ext_session={}&frontaddr={}&constraint=ETAT<>'AV'&soft_constraint={}&question_filter={}"
 ANSWER_URL = "https://{}/answer_api?callback=jQuery331023608747682107778_{}&urlApiWs={}&childMod={}&session={}&signature={}&step={}&answer={}&frontaddr={}&question_filter={}"
@@ -45,12 +47,13 @@ HEADERS = {
 }
 
 
-class Akinator():
+class Akinator:
     """
     A class that represents an Akinator game [ASYNC VERSION].
     The first thing you want to do after calling an instance of this class is to call "start_game()".
     """
-    def __init__(self):
+
+    def __init__(self, proxy: Optional[str] = None):
         self.uri = None
         self.server = None
         self.session = None
@@ -69,6 +72,7 @@ class Akinator():
         self.guesses = None
 
         self.client_session = None
+        self.proxy = proxy
 
     def _update(self, resp, start=False):
         """Update class variables"""
@@ -77,7 +81,9 @@ class Akinator():
             self.session = int(resp["parameters"]["identification"]["session"])
             self.signature = int(resp["parameters"]["identification"]["signature"])
             self.question = str(resp["parameters"]["step_information"]["question"])
-            self.progression = float(resp["parameters"]["step_information"]["progression"])
+            self.progression = float(
+                resp["parameters"]["step_information"]["progression"],
+            )
             self.step = int(resp["parameters"]["step_information"]["step"])
         else:
             self.question = str(resp["parameters"]["question"])
@@ -92,9 +98,14 @@ class Akinator():
     async def _get_session_info(self):
         """Get uid and frontaddr from akinator.com/game"""
 
-        info_regex = re.compile("var uid_ext_session = '(.*)'\\;\\n.*var frontaddr = '(.*)'\\;")
+        info_regex = re.compile(
+            "var uid_ext_session = '(.*)'\\;\\n.*var frontaddr = '(.*)'\\;",
+        )
 
-        async with self.client_session.get("https://en.akinator.com/game") as w:
+        async with self.client_session.get(
+            "https://en.akinator.com/game",
+            proxy=self.proxy,
+        ) as w:
             match = info_regex.search(await w.text())
 
         self.uid, self.frontaddr = match.groups()[0], match.groups()[1]
@@ -103,22 +114,29 @@ class Akinator():
         """Automatically get the uri and server from akinator.com for the specified language and theme"""
 
         server_regex = re.compile(
-            "[{\"translated_theme_name\":\"[\s\S]*\",\"urlWs\":\"https:\\\/\\\/srv[0-9]+\.akinator\.com:[0-9]+\\\/ws\",\"subject_id\":\"[0-9]+\"}]")
+            '[{"translated_theme_name":"[\s\S]*","urlWs":"https:\\\/\\\/srv[0-9]+\.akinator\.com:[0-9]+\\\/ws","subject_id":"[0-9]+"}]',
+        )
         uri = lang + ".akinator.com"
 
         bad_list = ["https://srv12.akinator.com:9398/ws"]
         while True:
-            async with self.client_session.get("https://" + uri) as w:
+            async with self.client_session.get("https://" + uri, proxy=self.proxy) as w:
                 match = server_regex.search(await w.text())
 
             parsed = json.loads(match.group().split("'arrUrlThemesToPlay', ")[-1])
 
             if theme == "c":
-                server = next((i for i in parsed if i["subject_id"] == "1"), None)["urlWs"]
+                server = next((i for i in parsed if i["subject_id"] == "1"), None)[
+                    "urlWs"
+                ]
             elif theme == "a":
-                server = next((i for i in parsed if i["subject_id"] == "14"), None)["urlWs"]
+                server = next((i for i in parsed if i["subject_id"] == "14"), None)[
+                    "urlWs"
+                ]
             elif theme == "o":
-                server = next((i for i in parsed if i["subject_id"] == "2"), None)["urlWs"]
+                server = next((i for i in parsed if i["subject_id"] == "2"), None)[
+                    "urlWs"
+                ]
 
             if server not in bad_list:
                 return {"uri": uri, "server": server}
@@ -165,7 +183,10 @@ class Akinator():
         else:
             self.client_session = aiohttp.ClientSession()
 
-        region_info = await self._auto_get_region(get_lang_and_theme(language)["lang"], get_lang_and_theme(language)["theme"])
+        region_info = await self._auto_get_region(
+            get_lang_and_theme(language)["lang"],
+            get_lang_and_theme(language)["theme"],
+        )
         self.uri, self.server = region_info["uri"], region_info["server"]
 
         self.child_mode = child_mode
@@ -173,7 +194,20 @@ class Akinator():
         self.question_filter = "cat%3D1" if self.child_mode else ""
         await self._get_session_info()
 
-        async with self.client_session.get(NEW_SESSION_URL.format(self.uri, self.timestamp, self.server, str(self.child_mode).lower(), self.uid, self.frontaddr, soft_constraint, self.question_filter), headers=HEADERS) as w:
+        async with self.client_session.get(
+            NEW_SESSION_URL.format(
+                self.uri,
+                self.timestamp,
+                self.server,
+                str(self.child_mode).lower(),
+                self.uid,
+                self.frontaddr,
+                soft_constraint,
+                self.question_filter,
+            ),
+            headers=HEADERS,
+            proxy=self.proxy,
+        ) as w:
             resp = self._parse_response(await w.text())
 
         if resp["completion"] == "OK":
@@ -195,7 +229,22 @@ class Akinator():
         """
         ans = ans_to_id(ans)
 
-        async with self.client_session.get(ANSWER_URL.format(self.uri, self.timestamp, self.server, str(self.child_mode).lower(), self.session, self.signature, self.step, ans, self.frontaddr, self.question_filter), headers=HEADERS) as w:
+        async with self.client_session.get(
+            ANSWER_URL.format(
+                self.uri,
+                self.timestamp,
+                self.server,
+                str(self.child_mode).lower(),
+                self.session,
+                self.signature,
+                self.step,
+                ans,
+                self.frontaddr,
+                self.question_filter,
+            ),
+            headers=HEADERS,
+            proxy=self.proxy,
+        ) as w:
             resp = self._parse_response(await w.text())
 
         if resp["completion"] == "OK":
@@ -211,9 +260,23 @@ class Akinator():
         If you're on the first question and you try to go back again, the CantGoBackAnyFurther exception will be raised
         """
         if self.step == 0:
-            raise CantGoBackAnyFurther("You were on the first question and couldn't go back any further")
+            raise CantGoBackAnyFurther(
+                "You were on the first question and couldn't go back any further",
+            )
 
-        async with self.client_session.get(BACK_URL.format(self.server, self.timestamp, str(self.child_mode).lower(), self.session, self.signature, self.step, self.question_filter), headers=HEADERS) as w:
+        async with self.client_session.get(
+            BACK_URL.format(
+                self.server,
+                self.timestamp,
+                str(self.child_mode).lower(),
+                self.session,
+                self.signature,
+                self.step,
+                self.question_filter,
+            ),
+            headers=HEADERS,
+            proxy=self.proxy,
+        ) as w:
             resp = self._parse_response(await w.text())
 
         if resp["completion"] == "OK":
@@ -232,7 +295,18 @@ class Akinator():
 
         It's recommended that you call this function when Aki's progression is above 85%, which is when he will have most likely narrowed it down to just one choice. You can get his current progression via "Akinator.progression"
         """
-        async with self.client_session.get(WIN_URL.format(self.server, self.timestamp, str(self.child_mode).lower(), self.session, self.signature, self.step), headers=HEADERS) as w:
+        async with self.client_session.get(
+            WIN_URL.format(
+                self.server,
+                self.timestamp,
+                str(self.child_mode).lower(),
+                self.session,
+                self.signature,
+                self.step,
+            ),
+            headers=HEADERS,
+            proxy=self.proxy,
+        ) as w:
             resp = self._parse_response(await w.text())
 
         if resp["completion"] == "OK":
@@ -252,4 +326,3 @@ class Akinator():
             await self.client_session.close()
 
         self.client_session = None
-
