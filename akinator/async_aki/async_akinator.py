@@ -105,6 +105,7 @@ class Akinator:
         async with self.client_session.get(
             "https://en.akinator.com/game",
             proxy=self.proxy,
+            ssl=False,
         ) as w:
             match = info_regex.search(await w.text())
 
@@ -120,7 +121,7 @@ class Akinator:
 
         bad_list = ["https://srv12.akinator.com:9398/ws"]
         while True:
-            async with self.client_session.get("https://" + uri, proxy=self.proxy) as w:
+            async with self.client_session.get("https://" + uri, proxy=self.proxy, ssl=False) as w:
                 match = server_regex.search(await w.text())
 
             parsed = json.loads(match.group().split("'arrUrlThemesToPlay', ")[-1])
@@ -210,6 +211,7 @@ class Akinator:
             ),
             headers=HEADERS,
             proxy=self.proxy,
+            ssl=False,
         ) as w:
             resp = self._parse_response(await w.text())
 
@@ -247,6 +249,7 @@ class Akinator:
             ),
             headers=HEADERS,
             proxy=self.proxy,
+            ssl=False,
         ) as w:
             resp = self._parse_response(await w.text())
 
@@ -279,6 +282,7 @@ class Akinator:
             ),
             headers=HEADERS,
             proxy=self.proxy,
+            ssl=False,
         ) as w:
             resp = self._parse_response(await w.text())
 
@@ -309,6 +313,7 @@ class Akinator:
             ),
             headers=HEADERS,
             proxy=self.proxy,
+            ssl=False,
         ) as w:
             resp = self._parse_response(await w.text())
 
@@ -328,4 +333,4 @@ class Akinator:
         if self.client_session is not None and self.client_session.closed is False:
             await self.client_session.close()
 
-        self.client_session = aiohttp.ClientSession()
+        # self.client_session = aiohttp.ClientSession()
