@@ -25,7 +25,7 @@ SOFTWARE.
 import json
 import re
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from .exceptions import CantGoBackAnyFurther
 from .utils import ans_to_id, get_lang_and_theme, raise_connection_error
@@ -73,7 +73,7 @@ class Akinator:
         self.step: int = 0
 
         self.first_guess: Optional[Dict[str, Any]] = None
-        self.guesses: Optional[Dict[str, Any]] = None
+        self.guesses: Optional[List[Dict[str, Any]]] = None
 
         self.proxy: Optional[Dict[str, str]] = (
             {"http": proxy, "https": proxy} if proxy else None

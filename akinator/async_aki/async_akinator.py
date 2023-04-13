@@ -25,7 +25,7 @@ SOFTWARE.
 import json
 import re
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import aiohttp
 
@@ -69,7 +69,7 @@ class Akinator:
         self.step: int = 0
 
         self.first_guess: Optional[Dict[str, Any]] = None
-        self.guesses: Optional[Dict[str, Any]] = None
+        self.guesses: Optional[List[Dict[str, Any]]] = None
 
         self.client_session: aiohttp.ClientSession = aiohttp.ClientSession()
         self.proxy: Optional[str] = proxy
