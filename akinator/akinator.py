@@ -25,7 +25,7 @@ SOFTWARE.
 import json
 import re
 import time
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from .exceptions import CantGoBackAnyFurther
 from .utils import ans_to_id, get_lang_and_theme, raise_connection_error
@@ -60,24 +60,26 @@ class Akinator:
     def __init__(self, proxy: Optional[str]):
         self.uri: str = ""
         self.server: str = ""
-        self.session: str = ""
-        self.signature: str = ""
-        self.uid = None
-        self.frontaddr = None
-        self.child_mode = None
-        self.question_filter = None
-        self.timestamp = None
+        self.session: int = 0
+        self.signature: int = 0
+        self.uid: str = ""
+        self.frontaddr: str = ""
+        self.child_mode: bool = False
+        self.question_filter: str = ""
+        self.timestamp: float = 0.0
 
-        self.question = None
-        self.progression = None
-        self.step = None
+        self.question: str = ""
+        self.progression: float = 0.0
+        self.step: int = 0
 
-        self.first_guess = None
-        self.guesses = None
+        self.first_guess: Optional[Dict[str, Any]] = None
+        self.guesses: Optional[Dict[str, Any]] = None
 
-        self.proxy = {"http": proxy, "https": proxy} if proxy else None
+        self.proxy: Optional[Dict[str, str]] = (
+            {"http": proxy, "https": proxy} if proxy else None
+        )
 
-    def _update(self, resp, start=False):
+    def _update(self, resp: dict, start: bool = False):
         """Update class variables"""
 
         if start:
@@ -93,7 +95,7 @@ class Akinator:
             self.progression = float(resp["parameters"]["progression"])
             self.step = int(resp["parameters"]["step"])
 
-    def _parse_response(self, response):
+    def _parse_response(self, response: str) -> dict:
         """Parse the JSON response and turn it into a Python object"""
 
         return json.loads(",".join(response.split("(")[1::])[:-1])
@@ -109,11 +111,11 @@ class Akinator:
         match = info_regex.search(r.text)
         self.uid, self.frontaddr = match.groups()[0], match.groups()[1]
 
-    def _auto_get_region(self, lang, theme):
+    def _auto_get_region(self, lang: str, theme: str) -> dict:
         """Automatically get the uri and server from akinator.com for the specified language and theme"""
 
         server_regex = re.compile(
-            '[{"translated_theme_name":"[\s\S]*","urlWs":"https:\\\/\\\/srv[0-9]+\.akinator\.com:[0-9]+\\\/ws","subject_id":"[0-9]+"}]',
+            r'[{"translated_theme_name":"[\s\S]*","urlWs":"https:\\\/\\\/srv[0-9]+\.akinator\.com:[0-9]+\\\/ws","subject_id":"[0-9]+"}]',
         )
         uri = lang + ".akinator.com"
 
@@ -140,7 +142,11 @@ class Akinator:
             if server not in bad_list:
                 return {"uri": uri, "server": server}
 
-    def start_game(self, language=None, child_mode=False):
+    def start_game(
+        self,
+        language: Optional[str] = None,
+        child_mode: bool = False,
+    ) -> str:
         """Start an Akinator game. Run this function first before the others. Returns a string containing the first question
 
         The "language" parameter can be left as None for English, the default language, or it can be set to one of the following (case-insensitive):
@@ -207,7 +213,7 @@ class Akinator:
         else:
             return raise_connection_error(resp["completion"])
 
-    def answer(self, ans):
+    def answer(self, ans: str) -> str:
         """Answer the current question, which you can find with "Akinator.question". Returns a string containing the next question
 
         The "ans" parameter must be one of these (case-insensitive):
@@ -243,7 +249,7 @@ class Akinator:
         else:
             return raise_connection_error(resp["completion"])
 
-    def back(self):
+    def back(self) -> str:
         """Goes back to the previous question. Returns a string containing that question
 
         If you're on the first question and you try to go back again, the CantGoBackAnyFurther exception will be raised
@@ -274,7 +280,7 @@ class Akinator:
         else:
             return raise_connection_error(resp["completion"])
 
-    def win(self):
+    def win(self) -> dict:
         """Get Aki's guesses for who the person you're thinking of is based on your answers to the questions so far
 
         Defines and returns the variable "Akinator.first_guess", a dictionary describing his first choice for who you're thinking about. The three most important values in the dict are "name" (character's name), "description" (description of character), and "absolute_picture_path" (direct link to image of character)

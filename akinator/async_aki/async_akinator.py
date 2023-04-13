@@ -25,12 +25,12 @@ SOFTWARE.
 import json
 import re
 import time
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import aiohttp
 
-from akinator.exceptions import CantGoBackAnyFurther
-from akinator.utils import ans_to_id, get_lang_and_theme, raise_connection_error
+from ..exceptions import CantGoBackAnyFurther
+from ..utils import ans_to_id, get_lang_and_theme, raise_connection_error
 
 NEW_SESSION_URL = "https://{}/new_session?callback=jQuery331023608747682107778_{}&urlApiWs={}&partner=1&childMod={}&player=website-desktop&uid_ext_session={}&frontaddr={}&constraint=ETAT<>'AV'&soft_constraint={}&question_filter={}"
 ANSWER_URL = "https://{}/answer_api?callback=jQuery331023608747682107778_{}&urlApiWs={}&childMod={}&session={}&signature={}&step={}&answer={}&frontaddr={}&question_filter={}"
@@ -54,27 +54,27 @@ class Akinator:
     """
 
     def __init__(self, proxy: Optional[str] = None):
-        self.uri = None
-        self.server = None
-        self.session = None
-        self.signature = None
-        self.uid = None
-        self.frontaddr = None
-        self.child_mode = None
-        self.question_filter = None
-        self.timestamp = None
+        self.uri: str = ""
+        self.server: str = ""
+        self.session: int = 0
+        self.signature: int = 0
+        self.uid: str = ""
+        self.frontaddr: str = ""
+        self.child_mode: bool = False
+        self.question_filter: str = ""
+        self.timestamp: float = 0.0
 
-        self.question = None
-        self.progression = None
-        self.step = None
+        self.question: str = ""
+        self.progression: float = 0.0
+        self.step: int = 0
 
-        self.first_guess = None
-        self.guesses = None
+        self.first_guess: Optional[Dict[str, Any]] = None
+        self.guesses: Optional[Dict[str, Any]] = None
 
-        self.client_session = None
-        self.proxy = proxy
+        self.client_session: aiohttp.ClientSession = aiohttp.ClientSession()
+        self.proxy: Optional[str] = proxy
 
-    def _update(self, resp, start=False):
+    def _update(self, resp: dict, start: bool = False):
         """Update class variables"""
 
         if start:
@@ -90,7 +90,7 @@ class Akinator:
             self.progression = float(resp["parameters"]["progression"])
             self.step = int(resp["parameters"]["step"])
 
-    def _parse_response(self, response):
+    def _parse_response(self, response: str) -> dict:
         """Parse the JSON response and turn it into a Python object"""
 
         return json.loads(",".join(response.split("(")[1::])[:-1])
@@ -110,11 +110,11 @@ class Akinator:
 
         self.uid, self.frontaddr = match.groups()[0], match.groups()[1]
 
-    async def _auto_get_region(self, lang, theme):
+    async def _auto_get_region(self, lang: str, theme: str) -> dict:
         """Automatically get the uri and server from akinator.com for the specified language and theme"""
 
         server_regex = re.compile(
-            '[{"translated_theme_name":"[\s\S]*","urlWs":"https:\\\/\\\/srv[0-9]+\.akinator\.com:[0-9]+\\\/ws","subject_id":"[0-9]+"}]',
+            r'[{"translated_theme_name":"[\s\S]*","urlWs":"https:\\\/\\\/srv[0-9]+\.akinator\.com:[0-9]+\\\/ws","subject_id":"[0-9]+"}]',
         )
         uri = lang + ".akinator.com"
 
@@ -141,7 +141,12 @@ class Akinator:
             if server not in bad_list:
                 return {"uri": uri, "server": server}
 
-    async def start_game(self, language=None, child_mode=False, client_session=None):
+    async def start_game(
+        self,
+        language: Optional[str] = None,
+        child_mode: bool = False,
+        client_session: Optional[aiohttp.ClientSession] = None,
+    ) -> str:
         """(coroutine)
         Start an Akinator game. Run this function first before the others. Returns a string containing the first question
 
@@ -180,8 +185,6 @@ class Akinator:
 
         if client_session:
             self.client_session = client_session
-        else:
-            self.client_session = aiohttp.ClientSession()
 
         region_info = await self._auto_get_region(
             get_lang_and_theme(language)["lang"],
@@ -216,7 +219,7 @@ class Akinator:
         else:
             return raise_connection_error(resp["completion"])
 
-    async def answer(self, ans):
+    async def answer(self, ans: str) -> str:
         """(coroutine)
         Answer the current question, which you can find with "Akinator.question". Returns a string containing the next question
 
@@ -253,7 +256,7 @@ class Akinator:
         else:
             return raise_connection_error(resp["completion"])
 
-    async def back(self):
+    async def back(self) -> str:
         """(coroutine)
         Goes back to the previous question. Returns a string containing that question
 
@@ -285,7 +288,7 @@ class Akinator:
         else:
             return raise_connection_error(resp["completion"])
 
-    async def win(self):
+    async def win(self) -> dict:
         """(coroutine)
         Get Aki's guesses for who the person you're thinking of is based on your answers to the questions so far
 
@@ -325,4 +328,4 @@ class Akinator:
         if self.client_session is not None and self.client_session.closed is False:
             await self.client_session.close()
 
-        self.client_session = None
+        self.client_session = aiohttp.ClientSession()
