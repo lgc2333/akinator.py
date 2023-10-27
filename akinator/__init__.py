@@ -9,11 +9,11 @@ A basic API wrapper for Akinator.
 """
 
 
-__title__ = 'akinator'
-__author__ = 'Omkaar'
-__license__ = 'MIT'
-__copyright__ = 'Copyright 2022 Omkaar'
-__version__ = '1.0.3'
+__title__ = "akinator"
+__author__ = "Omkaar"
+__license__ = "MIT"
+__copyright__ = "Copyright 2022 Omkaar"
+__version__ = "1.0.3"
 
 
 import os

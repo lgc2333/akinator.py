@@ -121,7 +121,9 @@ class Akinator:
 
         bad_list = ["https://srv12.akinator.com:9398/ws"]
         while True:
-            async with self.client_session.get("https://" + uri, proxy=self.proxy, ssl=False) as w:
+            async with self.client_session.get(
+                "https://" + uri, proxy=self.proxy, ssl=False
+            ) as w:
                 match = server_regex.search(await w.text())
 
             parsed = json.loads(match.group().split("'arrUrlThemesToPlay', ")[-1])
